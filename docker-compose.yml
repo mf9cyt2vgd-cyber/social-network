@@ -1,0 +1,63 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    env_file:
+      - ./post-service/.env      # Переменные окружения для БД
+    ports:
+      - "5432:5432"              # внешний порт 5433 для хоста, внутри контейнера 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      # Сколько раз Docker попытается выполнить тест, прежде чем считать контейнер unhealthy
+      retries: 5
+
+  post-service:
+    build: ./post-service
+    env_file:
+      - ./post-service/.env
+    environment:
+      - APP_ENV=dev
+    ports:
+      - "8000:8000"
+    networks:
+      - monitoring
+    command: ["sh", "-c", "./migrator --migrations-path ./migrations && ./post-service"]
+    depends_on:
+      postgres: # Ждем пока health у postgres будет пройден
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# Лучше убрать из билда и запускать в ручную, так как после запуска у нас остаються тестовые данные
+  bombardier:
+    image: alpine/bombardier
+    command: [
+      "-c", "100",
+      "-d", "10s",
+      "-m", "POST",
+      "-H", "Content-Type: application/json",
+      "-b", '{"title":"Test","author":"Bombardier","content":"Test content","tags":["test"]}',
+      "http://post-service:8000/posts"
+    ]
+    networks:
+      - monitoring
+    depends_on:
+      - post-service  
+
+volumes:
+  postgres_data:
+
+networks:
+  monitoring:
+    driver: bridge
