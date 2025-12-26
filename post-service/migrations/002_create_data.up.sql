@@ -1,0 +1,3 @@
+-- Fill data
+-- INSERT INTO posts (id, title, author, content, tags, created_at)
+-- VALUES ($1, $2, $3, $4, $5, $6)
