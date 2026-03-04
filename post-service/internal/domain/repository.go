@@ -13,7 +13,7 @@ type PostRepository interface {
 }
 
 type CacheRepository interface {
-	// List(ctx context.Context) ([]*Post, error)
+	List(ctx context.Context) ([]*Post, error)
 	GetPost(ctx context.Context, id string) (*Post, error)
 	SavePost(ctx context.Context, post *Post, ttl time.Duration) error
 }

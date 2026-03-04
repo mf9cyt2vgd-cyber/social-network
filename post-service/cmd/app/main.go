@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	repository "post-service/internal/repository/kafka"
+	"post-service/internal/repository/redis"
 	"syscall"
 	"time"
 
-	// repository "post-service/internal/repository/kafka"
 	"post-service/internal/repository/postgres"
-	// "post-service/internal/repository/redis"
 	route "post-service/internal/router"
 
 	"post-service/internal/config"
@@ -37,30 +37,26 @@ func main() {
 	if err != nil {
 		log.Error("failed to connect to db:", slog.Any("err", err))
 	}
-	defer pool.Close() // закрываем при завершении приложения
+	defer pool.Close()
 
-	// Репозиторий для Postgres
-	postRepo := postgres.NewPostgresPostRepository(pool) // Сущность для работы с posts
+	postRepo := postgres.NewPostgresPostRepository(pool)
 
-	// TODO Нужно все это добро ниже подключить (подсказку оставлю)
-	// Подключаем Redis (cache)
-	// cache := redis.NewRedisCache(cfg.Redis.Addr, cfg.Redis.DB, log.With(slog.String("component", "redis")))
+	cache, err := redis.NewRedisClient(cfg.Redis.Addr, cfg.Redis.DB, log.With(slog.String("component", "redis")))
+	defer cache.Close()
 
-	// var producer *repository.KafkaProducer
-	// for i := 0; i < 10; i++ {
-	// 	producer, err = repository.NewKafkaProducer(cfg.Brokers, cfg.Topic, log.With(slog.String("component", "kafka")))
-	// 	if err == nil {
-	// 		break
-	// 	}
-	// 	log.Warn("Kafka not ready, retrying in 3s...", slog.Any("err", err))
-	// 	time.Sleep(3 * time.Second)
-	// }
-	// if producer == nil {
-	// 	log.Error("cannot connect to Kafka after retries", slog.Any("err", err))
-	// }
-
-	// postUC := usecase.NewPostUsecase(postRepo, producer, cache) // Бизнес-логика для posts
-	postUC := usecase.NewPostUsecase(postRepo) // Бизнес-логика для posts
+	var producer *repository.KafkaProducer
+	for i := 0; i < 10; i++ {
+		producer, err = repository.NewKafkaProducer(cfg.Brokers, cfg.Topic, log.With(slog.String("component", "kafka")))
+		if err == nil {
+			break
+		}
+		log.Warn("Kafka not ready, retrying in 3s...", slog.Any("err", err))
+		time.Sleep(3 * time.Second)
+	}
+	if producer == nil {
+		log.Error("cannot connect to Kafka after retries", slog.Any("err", err))
+	}
+	postUC := usecase.NewPostUsecase(postRepo, producer, cache) // Бизнес-логика для posts
 
 	// Передаем ctx в обработчики
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
