@@ -1,4 +1,4 @@
-package consumer
+package kafka
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func NewKafkaConsumer(brokers []string, groupId string, topic string, log *slog.
 		"auto.offset.reset": "earliest",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create consumer: %w", err)
+		return nil, fmt.Errorf("failed to create kafka: %w", err)
 	}
 	err = c.Subscribe(topic, nil)
 	if err != nil {
