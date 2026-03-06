@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"notifications-service/internal/config"
-	"notifications-service/internal/consumer"
-	"notifications-service/internal/lib/logger"
-	"notifications-service/internal/lib/utils"
+	"notifications-service/internal/logger"
+	"notifications-service/internal/mapper"
+	"notifications-service/internal/transport/kafka"
 	"os"
 	"os/signal"
 	"sync"
@@ -19,9 +19,9 @@ func main() {
 	ctxC, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	c, err := consumer.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
+	c, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
 	if err != nil {
-		log.Error("failed to create consumer", "error", err)
+		log.Error("failed to create kafka", "error", err)
 	}
 
 	wg := new(sync.WaitGroup)
@@ -35,7 +35,7 @@ func main() {
 	for {
 		select {
 		case msg := <-msgschan:
-			post, err := utils.ConvertKafkaMessageIntoPost(msg)
+			post, err := mapper.ConvertKafkaMessageIntoPost(msg)
 			if err != nil {
 				log.Error("failed to convert message", "error", err)
 				continue
@@ -43,7 +43,7 @@ func main() {
 			log.Info("successfully read post from Kafka", "post.id", post.ID)
 			fmt.Println(post)
 		case e := <-errChan:
-			log.Error("got error from consumer", "error", e)
+			log.Error("got error from kafka", "error", e)
 			continue
 		case <-done:
 			log.Info("got interrupt signal")
