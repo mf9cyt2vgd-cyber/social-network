@@ -12,11 +12,16 @@ import (
 type Config struct {
 	Env   string `yaml:"env" env-default:"local"`
 	Kafka `yaml:"kafka"`
+	Redis `yaml:"redis"`
 }
 type Kafka struct {
 	Brokers []string `yaml:"brokers" env-default:"localhost:9092"`
 	Topic   string   `yaml:"topic" env-default:"posts"`
 	GroupID string   `yaml:"group_id" env-default:"notification-service"`
+}
+type Redis struct {
+	Addr string `yaml:"address" env-default:"localhost:6380"`
+	DB   int    `yaml:"db" env-default:"0"`
 }
 
 func MustLoad() *Config {

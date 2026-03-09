@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"notification-service/internal/config"
 	"notification-service/internal/logger"
-	"notification-service/internal/mapper"
+	"notification-service/internal/repository/redis"
 	"notification-service/internal/transport/kafka"
+	"notification-service/internal/usecase"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
@@ -19,38 +18,31 @@ func main() {
 	ctxC, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	c, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
+	consumer, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
 	if err != nil {
-		log.Error("failed to create kafka consumer", "error", err)
+		log.Error("failed to create Kafka consumer")
+		os.Exit(1)
 	}
+	defer func(consumer *kafka.KafkaConsumer) {
+		err := consumer.Close()
+		if err != nil {
+			log.Error("error closing Kafka consumer", "error", err)
+		}
+	}(consumer)
 
-	wg := new(sync.WaitGroup)
-	errChan := make(chan error)
-	msgschan := make(chan []byte)
+	cache := redis.New(cfg.Redis.Addr, cfg.Redis.DB, log)
+	defer cache.Close()
+
+	notificationsUC := usecase.NotificationUsecase{
+		Cache:         cache,
+		EventConsumer: consumer,
+	}
+	go func() {
+		notificationsUC.StartSendingNotifications(ctxC, log)
+	}()
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	wg.Go(func() {
-		c.Consume(ctxC, msgschan, errChan)
-	})
-	for {
-		select {
-		case msg := <-msgschan:
-			post, err := mapper.ConvertKafkaMessageIntoPost(msg)
-			if err != nil {
-				log.Error("failed to convert message", "error", err)
-				continue
-			}
-			log.Info("successfully read post from Kafka", "post.id", post.ID)
-			fmt.Println(post)
-		case e := <-errChan:
-			log.Error("got error from kafka", "error", e)
-			continue
-		case <-done:
-			log.Info("got interrupt signal")
-			cancel()
-			wg.Wait()
-			return
-		}
-	}
-
+	<-done
+	log.Info("got interrupt signal, stopping...")
+	cancel()
 }
