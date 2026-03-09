@@ -7,7 +7,7 @@ http_server:
 
 kafka:
   brokers: ["localhost:9092"]
-  topic: "posts"
+  topic: "posts.created"
   group_id: "notification-service"
 
 redis:
