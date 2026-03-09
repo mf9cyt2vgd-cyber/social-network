@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"notifications-service/internal/config"
-	"notifications-service/internal/logger"
-	"notifications-service/internal/mapper"
-	"notifications-service/internal/transport/kafka"
+	"notification-service/internal/config"
+	"notification-service/internal/logger"
+	"notification-service/internal/mapper"
+	"notification-service/internal/transport/kafka"
 	"os"
 	"os/signal"
 	"sync"
@@ -21,7 +21,7 @@ func main() {
 
 	c, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
 	if err != nil {
-		log.Error("failed to create kafka", "error", err)
+		log.Error("failed to create kafka consumer", "error", err)
 	}
 
 	wg := new(sync.WaitGroup)

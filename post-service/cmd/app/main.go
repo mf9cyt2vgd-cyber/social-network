@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	repository "post-service/internal/repository/kafka"
+	"post-service/internal/repository/events/forwarder"
 	"post-service/internal/repository/redis"
 	"syscall"
 	"time"
@@ -24,7 +24,6 @@ import (
 
 func main() {
 	ctx := context.Background()
-
 	// Configurate system
 	cfg := config.MustLoad()
 
@@ -39,29 +38,27 @@ func main() {
 	}
 	defer pool.Close()
 
-	postRepo := postgres.NewPostgresPostRepository(pool)
+	postRepo, err := postgres.NewPostgresPostRepository(pool, log)
+	if err != nil {
+		log.Error("failed to create post repository", "error", err)
+		os.Exit(1)
+	}
+	defer postRepo.Close()
 
 	cache, err := redis.NewRedisClient(cfg.Redis.Addr, cfg.Redis.DB, log.With(slog.String("component", "redis")))
 	defer cache.Close()
 
-	var producer *repository.KafkaProducer
-	for i := 0; i < 10; i++ {
-		producer, err = repository.NewKafkaProducer(cfg.Brokers, cfg.Topic, log.With(slog.String("component", "kafka")))
-		if err == nil {
-			break
-		}
-		log.Warn("Kafka not ready, retrying in 3s...", slog.Any("err", err))
-		time.Sleep(3 * time.Second)
-	}
-	if producer == nil {
-		log.Error("cannot connect to Kafka after retries", slog.Any("err", err))
-	}
-	postUC := usecase.NewPostUsecase(postRepo, producer, cache) // Бизнес-логика для posts
+	postUC := usecase.NewPostUsecase(postRepo, cache) // Бизнес-логика для posts
 
+	fwd, err := forwarder.StartForwarder(ctx, pool, forwarder.Config{KafkaBrokers: cfg.Brokers, Logger: log})
+	if err != nil {
+		log.Error("failed to start outbox forwarder", "error", err)
+		return
+	}
 	// Передаем ctx в обработчики
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
 
-	// Settings and started server + Grasful shortdown
+	// Settings and started server + Graceful shutdown
 	srv := &http.Server{
 		Addr:         cfg.Address,
 		ReadTimeout:  cfg.Timeout,
@@ -86,12 +83,16 @@ func main() {
 	<-done
 	log.Info("server stopping...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("server forced to shutdown", slog.Any("error", err))
 		os.Exit(1)
+	}
+
+	if err := fwd.Stop(); err != nil {
+		log.Error("failed to stop forwarder", "error", err)
 	}
 
 	log.Info("server stopped gracefully")

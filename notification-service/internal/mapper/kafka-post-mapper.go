@@ -2,7 +2,7 @@ package mapper
 
 import (
 	"encoding/json"
-	"notifications-service/internal/domain"
+	"notification-service/internal/domain"
 )
 
 func ConvertKafkaMessageIntoPost(msg []byte) (domain.Post, error) {

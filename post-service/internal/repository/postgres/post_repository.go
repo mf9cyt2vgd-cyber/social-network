@@ -2,29 +2,81 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"post-service/internal/domain"
 
+	"github.com/ThreeDotsLabs/watermill"
+	wmsql "github.com/ThreeDotsLabs/watermill-sql/v4/pkg/sql"
+	"github.com/ThreeDotsLabs/watermill/components/forwarder"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresPostRepository struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	publisher message.Publisher
+	logger    *slog.Logger
+}
+type txKey struct {
 }
 
-func NewPostgresPostRepository(pool *pgxpool.Pool) *PostgresPostRepository {
-	return &PostgresPostRepository{pool: pool}
+func NewPostgresPostRepository(pool *pgxpool.Pool, log *slog.Logger) (*PostgresPostRepository, error) {
+	db := wmsql.BeginnerFromPgx(pool)
+
+	outboxPublisher, err := wmsql.NewPublisher(
+		db,
+		wmsql.PublisherConfig{
+			SchemaAdapter: wmsql.DefaultPostgreSQLSchema{GenerateMessagesTableName: func(topic string) string {
+				return "posts_outbox"
+			}},
+		},
+		watermill.NewSlogLogger(log))
+	if err != nil {
+		return nil, err
+	}
+	publisher := forwarder.NewPublisher(outboxPublisher, forwarder.PublisherConfig{
+		ForwarderTopic: "posts_outbox_forwarder",
+	})
+	return &PostgresPostRepository{pool: pool, publisher: publisher, logger: log}, nil
 }
 
-// Прокидывать контекст из usecase это нормально
-// Это нужно для отмены запросов, таймаутов и т.д.
-// Потому что в текущем виде контекст всегда будет background
-// То есть всегда без отмены и таймаутов
 func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) error {
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO posts (id, title, author, content, tags, created_at)
+	tx, err := r.pool.Begin(ctx)
+
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `INSERT INTO posts (id, title, author, content, tags, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		post.ID, post.Title, post.Author, post.Content, post.Tags, post.CreatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]any{
+		"id":         post.ID,
+		"title":      post.Title,
+		"author":     post.Author,
+		"content":    post.Content,
+		"tags":       post.Tags,
+		"created_at": post.CreatedAt,
+	})
+	if err != nil {
+		return err
+	}
+	var txContextKey txKey
+	txCtx := context.WithValue(ctx, txContextKey, tx)
+	msg := message.NewMessage(
+		watermill.NewUUID(),
+		payload)
+
+	msg.SetContext(txCtx)
+	err = r.publisher.Publish("posts.created", msg)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *PostgresPostRepository) GetByID(ctx context.Context, id string) (*domain.Post, error) {
@@ -56,4 +108,10 @@ func (r *PostgresPostRepository) List(ctx context.Context) ([]*domain.Post, erro
 		posts = append(posts, &p)
 	}
 	return posts, nil
+}
+func (r *PostgresPostRepository) Close() error {
+	if r.publisher != nil {
+		return r.publisher.Close()
+	}
+	return nil
 }

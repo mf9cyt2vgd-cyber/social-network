@@ -17,8 +17,3 @@ type CacheRepository interface {
 	GetPost(ctx context.Context, id string) (*Post, error)
 	SavePost(ctx context.Context, post *Post, ttl time.Duration) error
 }
-
-// EventProducer — интерфейс для отправки событий (Kafka)
-type EventProducer interface {
-	Publish(ctx context.Context, post *Post) error
-}

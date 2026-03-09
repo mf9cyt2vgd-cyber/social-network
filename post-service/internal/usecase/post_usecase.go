@@ -11,16 +11,14 @@ import (
 )
 
 type PostUsecase struct {
-	repo     domain.PostRepository  // db - postgres
-	producer domain.EventProducer   // kafka
-	cache    domain.CacheRepository // redis
+	repo  domain.PostRepository  // db - postgres
+	cache domain.CacheRepository // redis
 }
 
-func NewPostUsecase(poolRepo domain.PostRepository, producer domain.EventProducer, cache domain.CacheRepository) *PostUsecase {
+func NewPostUsecase(poolRepo domain.PostRepository, cache domain.CacheRepository) *PostUsecase {
 	return &PostUsecase{
-		repo:     poolRepo,
-		producer: producer,
-		cache:    cache,
+		repo:  poolRepo,
+		cache: cache,
 	}
 }
 
@@ -38,21 +36,16 @@ func (u *PostUsecase) List(ctx context.Context) ([]*domain.Post, error) {
 }
 
 func (u *PostUsecase) GetByID(ctx context.Context, id string) (*domain.Post, error) {
-	// TODO Подсказки ниже
-	// 1. Проверяем кеш (игнорируем ошибку, но логгируем)
-	// Кэш не должен ломать логику приложения
 	post, _ := u.cache.GetPost(ctx, id)
 	if post != nil {
 		return post, nil
 	}
 
-	// 2. Достаём из Postgres
 	post, err := u.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get post by id %s: %w", id, err)
 	}
 
-	// 3. Кладём в кеш (асинхронно, чтобы не блокировать ответ)
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
@@ -72,17 +65,10 @@ func (u *PostUsecase) CreatePost(ctx context.Context, title, author, content str
 		CreatedAt: time.Now(),
 	}
 
-	// 1. Сохраняем в БД
 	if err := u.repo.Save(ctx, post); err != nil {
 		return nil, fmt.Errorf("failed to save post to database: %w", err)
 	}
-	// TODO Подсказки ниже
-	// 2. Публикуем событие в Kafka
-	if err := u.producer.Publish(ctx, post); err != nil {
-		return nil, fmt.Errorf("failed to publish post to kafka: %w", err)
-	}
 
-	// 3. Асинхронно сохраняем в кеш
 	go func(p *domain.Post) {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -92,6 +78,5 @@ func (u *PostUsecase) CreatePost(ctx context.Context, title, author, content str
 		}
 	}(post)
 
-	// 3. Возвращаем пост
 	return post, nil
 }
