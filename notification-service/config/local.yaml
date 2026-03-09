@@ -1,5 +1,8 @@
 env: "local"
 kafka:
   brokers: ["kafka:9092"]
-  topic: "post.created"
+  topic: "posts.created"
   group_id: "notification-service"
+redis:
+  address: "localhost:6380"
+  db: 0

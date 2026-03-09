@@ -13,7 +13,6 @@ import (
 
 type CacheRepository struct {
 	*redis.Client
-	log *slog.Logger
 }
 
 func NewRedisClient(addr string, db int, logger *slog.Logger) (*CacheRepository, error) {
@@ -22,7 +21,6 @@ func NewRedisClient(addr string, db int, logger *slog.Logger) (*CacheRepository,
 	})
 	return &CacheRepository{
 		Client: c,
-		log:    logger,
 	}, nil
 }
 func (r CacheRepository) List(ctx context.Context) ([]*domain.Post, error) {
