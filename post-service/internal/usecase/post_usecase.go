@@ -48,19 +48,17 @@ func (u *PostUsecase) GetByID(ctx context.Context, id string) (*domain.Post, err
 		return nil, fmt.Errorf("failed to get post by id %s: %w", id, err)
 	}
 
-	go func() {
-		ctx := context.Background()
-		tracer := otel.Tracer("post-service/cache")
+	sc := trace.SpanFromContext(ctx).SpanContext()
 
-		ctx, span := tracer.Start(
-			ctx,
-			"Cache SavePost",
-			trace.WithLinks(trace.Link{SpanContext: trace.SpanContextFromContext(ctx)}),
+	go func() {
+		tracer := otel.Tracer("post-service")
+		ctxCache, span := tracer.Start(
+			context.Background(),
+			"CacheSavePost",
+			trace.WithLinks(trace.Link{SpanContext: sc}),
 		)
 		defer span.End()
-
-		if err := u.cache.SavePost(ctx, post, 5*time.Minute); err != nil {
-			span.RecordError(err)
+		if err := u.cache.SavePost(ctxCache, post, 5*time.Minute); err != nil {
 			slog.Error("failed to save in cache", "error", err)
 		}
 	}()
@@ -82,22 +80,20 @@ func (u *PostUsecase) CreatePost(ctx context.Context, title, author, content str
 		return nil, fmt.Errorf("failed to save post to database: %w", err)
 	}
 
-	go func(post *domain.Post, parentCtx context.Context) {
-		ctxCache := context.Background()
-		tracer := otel.Tracer("post-service/cache")
+	sc := trace.SpanFromContext(ctx).SpanContext()
 
+	go func() {
+		tracer := otel.Tracer("post-service")
 		ctxCache, span := tracer.Start(
-			ctxCache,
-			"Cache SavePost",
-			trace.WithLinks(trace.Link{SpanContext: trace.SpanContextFromContext(ctx)}),
+			context.Background(),
+			"CacheSavePost",
+			trace.WithLinks(trace.Link{SpanContext: sc}),
 		)
 		defer span.End()
-
 		if err := u.cache.SavePost(ctxCache, post, 5*time.Minute); err != nil {
-			span.RecordError(err)
 			slog.Error("failed to save in cache", "error", err)
 		}
-	}(post, ctx)
+	}()
 
 	return post, nil
 }
