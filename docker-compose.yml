@@ -37,6 +37,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+    networks:
+      - monitoring
   notification-service:
     build: ./notification-service
     environment:

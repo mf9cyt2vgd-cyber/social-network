@@ -19,13 +19,10 @@ func NewHealthHandler(log *slog.Logger) *HealthHandler {
 }
 
 func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	response := struct {
-		Status string `json:"status"`
-	}{
-		Status: "ok",
-	}
+
+	response := HealthResponse{Status: "ok"}
+	data, _ := json.Marshal(response)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(response)
+	_, _ = w.Write(data)
 }

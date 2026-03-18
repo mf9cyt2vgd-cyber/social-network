@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type PostUsecase struct {
@@ -47,9 +49,20 @@ func (u *PostUsecase) GetByID(ctx context.Context, id string) (*domain.Post, err
 	}
 
 	go func() {
-		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
-		_ = u.cache.SavePost(cacheCtx, post, 5*time.Minute)
+		ctx := context.Background()
+		tracer := otel.Tracer("post-service/cache")
+
+		ctx, span := tracer.Start(
+			ctx,
+			"Cache SavePost",
+			trace.WithLinks(trace.Link{SpanContext: trace.SpanContextFromContext(ctx)}),
+		)
+		defer span.End()
+
+		if err := u.cache.SavePost(ctx, post, 5*time.Minute); err != nil {
+			span.RecordError(err)
+			slog.Error("failed to save in cache", "error", err)
+		}
 	}()
 
 	return post, nil
@@ -69,14 +82,22 @@ func (u *PostUsecase) CreatePost(ctx context.Context, title, author, content str
 		return nil, fmt.Errorf("failed to save post to database: %w", err)
 	}
 
-	go func(p *domain.Post) {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		err := u.cache.SavePost(cacheCtx, post, 5*time.Minute)
-		if err != nil {
+	go func(post *domain.Post, parentCtx context.Context) {
+		ctxCache := context.Background()
+		tracer := otel.Tracer("post-service/cache")
+
+		ctxCache, span := tracer.Start(
+			ctxCache,
+			"Cache SavePost",
+			trace.WithLinks(trace.Link{SpanContext: trace.SpanContextFromContext(ctx)}),
+		)
+		defer span.End()
+
+		if err := u.cache.SavePost(ctxCache, post, 5*time.Minute); err != nil {
+			span.RecordError(err)
 			slog.Error("failed to save in cache", "error", err)
 		}
-	}(post)
+	}(post, ctx)
 
 	return post, nil
 }

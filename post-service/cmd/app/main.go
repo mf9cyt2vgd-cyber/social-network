@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"post-service/internal/lib/gotel"
 	"post-service/internal/repository/events/forwarder"
 	"post-service/internal/repository/redis"
 	"syscall"
@@ -20,10 +21,12 @@ import (
 	"post-service/internal/usecase"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
 	ctx := context.Background()
+	poolCtx := context.Background()
 	// Configurate system
 	cfg := config.MustLoad()
 
@@ -32,7 +35,7 @@ func main() {
 	log.Info("starting the project...", slog.String("env", cfg.Env))
 
 	// Подключаемся к БД
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	pool, err := pgxpool.New(poolCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Error("failed to connect to db:", slog.Any("err", err))
 	}
@@ -58,15 +61,17 @@ func main() {
 	// Передаем ctx в обработчики
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
 
+	shutdown := gotel.InitTracer()
+	defer shutdown(ctx)
+	wrappedHandler := otelhttp.NewHandler(router, "Post-Service-handler")
 	// Settings and started server + Graceful shutdown
 	srv := &http.Server{
 		Addr:         cfg.Address,
 		ReadTimeout:  cfg.Timeout,
 		WriteTimeout: cfg.Timeout,
 		IdleTimeout:  cfg.IdleTimeout,
-		Handler:      router,
+		Handler:      wrappedHandler,
 	}
-
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 

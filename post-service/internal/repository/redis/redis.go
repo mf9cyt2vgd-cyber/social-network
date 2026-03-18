@@ -8,6 +8,7 @@ import (
 	"post-service/internal/domain"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,6 +20,9 @@ func NewRedisClient(addr string, db int, logger *slog.Logger) (*CacheRepository,
 	c := redis.NewClient(&redis.Options{
 		Addr: addr, DB: db,
 	})
+	if err := redisotel.InstrumentTracing(c); err != nil {
+		return nil, err
+	}
 	return &CacheRepository{
 		Client: c,
 	}, nil
