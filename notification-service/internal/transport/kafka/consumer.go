@@ -2,96 +2,95 @@ package kafka
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"notification-service/internal/domain"
-	"notification-service/internal/mapper"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"notification-service/internal/domain"
+	"notification-service/internal/mapper"
+
+	"github.com/Shopify/sarama"
+	"github.com/ThreeDotsLabs/watermill"
+	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
+	"github.com/ThreeDotsLabs/watermill/message"
 )
 
 type KafkaConsumer struct {
-	*kafka.Consumer
-	log    *slog.Logger
-	cancel context.CancelFunc
-	done   chan struct{}
+	subscriber *kafka.Subscriber
+	log        *slog.Logger
+	topic      string
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
-func NewKafkaConsumer(brokers []string, groupId string, topic string, log *slog.Logger) (*KafkaConsumer, error) {
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": strings.Join(brokers, ","),
-		"group.id":          groupId,
-		"auto.offset.reset": "earliest",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kafka: %w", err)
+func NewKafkaConsumer(
+	brokers []string,
+	groupID string,
+	topic string,
+	log *slog.Logger,
+) (*KafkaConsumer, error) {
+	saramaCfg := sarama.NewConfig()
+	saramaCfg.Consumer.Return.Errors = true
+
+	subscriberConfig := kafka.SubscriberConfig{
+		OverwriteSaramaConfig: saramaCfg,
+		Brokers:               brokers,
+		ConsumerGroup:         groupID,
+		Unmarshaler:           kafka.DefaultMarshaler{},
+		Tracer:                kafka.NewOTELSaramaTracer(),
+		ReconnectRetrySleep:   5 * time.Second,
 	}
-	err = c.Subscribe(topic, nil)
+
+	subscriber, err := kafka.NewSubscriber(subscriberConfig, watermill.NewSlogLogger(log))
 	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe topic: %w", err)
+		return nil, err
 	}
+
 	return &KafkaConsumer{
-		Consumer: c,
-		log:      log,
+		subscriber: subscriber,
+		log:        log,
+		topic:      topic,
 	}, nil
 }
+
 func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.Post {
+	out := make(chan *domain.Post)
+	k.done = make(chan struct{})
 	consumeCtx, cancel := context.WithCancel(ctx)
 	k.cancel = cancel
-	k.done = make(chan struct{})
-	out := make(chan *domain.Post)
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
+
 	go func() {
-		defer wg.Done()
+		defer close(out)
 		defer close(k.done)
-		for {
-			select {
-			case <-consumeCtx.Done():
-				k.log.Info("Got ctx signal", "signal", ctx.Err())
-				return
-			default:
-				msg, err := k.ReadMessage(time.Second)
-				if err != nil {
-					if kErr, ok := err.(kafka.Error); ok && !kErr.IsTimeout() {
-						k.log.Error("Kafka read failed", "error", err)
-					}
-					continue
-				}
 
-				received, err := mapper.ConvertKafkaMessageIntoPost(msg.Value)
+		messages, err := k.subscriber.Subscribe(ctx, k.topic)
+		if err != nil {
+			k.log.Error("failed to subscribe to topic", err)
+			return
+		}
+		for msg := range messages {
+			func(m *message.Message) {
+				post, err := mapper.ConvertKafkaMessageIntoPost(m.Payload)
 				if err != nil {
-					k.log.Error("failed to convert Kafka message", "error", err)
-					continue
+					k.log.Error("failed to convert Kafka message", err)
+					return
 				}
-
-				out <- &received
-			}
+				select {
+				case out <- &post:
+					m.Ack()
+				case <-consumeCtx.Done():
+					m.Nack()
+					return
+				}
+			}(msg)
 		}
 	}()
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
+
 	return out
 }
+
 func (k *KafkaConsumer) Close() error {
-	if k.cancel == nil {
-		return fmt.Errorf("should start consumer before calling close func")
+	if k.cancel != nil {
+		k.cancel()
 	}
-	k.log.Info("got stop signal")
-	k.cancel()
-	err := k.Consumer.Close()
-	if err != nil {
-		return err
-	}
-	select {
-	case <-k.done:
-	case <-time.After(10 * time.Second):
-	}
-	k.log.Info("consumer stopped gracefully")
-	return nil
+	return k.subscriber.Close()
 }

@@ -36,7 +36,7 @@ func (r CacheRepository) List(ctx context.Context) ([]*domain.Post, error) {
 	for _, id := range ids {
 		post, err := r.GetPost(ctx, id)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		posts = append(posts, post)
 	}
@@ -49,6 +49,9 @@ func (r CacheRepository) GetPost(ctx context.Context, id string) (*domain.Post, 
 	data, _ := r.Get(ctx, key).Bytes()
 	err := json.Unmarshal(data, &post)
 	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to get post by id %s: %w", id, err)
 	}
 	return &post, err
@@ -57,15 +60,14 @@ func (r CacheRepository) SavePost(ctx context.Context, post *domain.Post, ttl ti
 	key := fmt.Sprintf("post:%s", post.ID)
 	postJSON, err := json.Marshal(post)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal post to redis: %w", err)
 	}
-	err = r.Set(ctx, key, postJSON, ttl).Err()
+	pipe := r.Pipeline()
+	pipe.Set(ctx, key, postJSON, ttl)
+	pipe.SAdd(ctx, "posts:ids", post.ID)
+	_, err = pipe.Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to save post to redis: %w", err)
-	}
-	err = r.SAdd(ctx, "posts:ids", post.ID).Err()
-	if err != nil {
-		return fmt.Errorf("failed to save post.id to set in redis: %w", err)
+		return fmt.Errorf("failed to execute pipeline: %w", err)
 	}
 	return nil
 }

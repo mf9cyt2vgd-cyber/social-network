@@ -1,14 +1,14 @@
-package route
+package router
 
 import (
 	"context"
 	"log/slog"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-
 	httpDelivery "post-service/internal/delivery/http"
 	"post-service/internal/usecase"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

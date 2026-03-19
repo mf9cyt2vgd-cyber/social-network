@@ -67,9 +67,11 @@ func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) er
 	if err != nil {
 		return err
 	}
+
 	var txContextKey txKey
 	txCtx := context.WithValue(ctx, txContextKey, tx)
-	msg := message.NewMessage(
+
+	msg := message.NewMessageWithContext(txCtx,
 		watermill.NewUUID(),
 		payload)
 

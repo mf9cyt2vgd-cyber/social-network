@@ -50,6 +50,7 @@ func StartForwarder(ctx context.Context, pool *pgxpool.Pool, cfg Config) (*Forwa
 		kafka.PublisherConfig{
 			Brokers:   cfg.KafkaBrokers,
 			Marshaler: kafka.DefaultMarshaler{},
+			Tracer:    kafka.NewOTELSaramaTracer(),
 		},
 		logger)
 	if err != nil {

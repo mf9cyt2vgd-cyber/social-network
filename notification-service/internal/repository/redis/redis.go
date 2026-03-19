@@ -7,6 +7,7 @@ import (
 	"notification-service/internal/mapper"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -16,6 +17,9 @@ type RedisCache struct {
 
 func New(addr string, db int, log *slog.Logger) *RedisCache {
 	c := redis.NewClient(&redis.Options{Addr: addr, DB: db})
+	if err := redisotel.InstrumentTracing(c); err != nil {
+		return nil
+	}
 	return &RedisCache{
 		client: c,
 	}
@@ -23,20 +27,14 @@ func New(addr string, db int, log *slog.Logger) *RedisCache {
 func (r *RedisCache) SaveNotificationWithLimit(ctx context.Context, post *domain.Post) error {
 	pipe := r.client.Pipeline()
 	score := float64(time.Now().UnixMilli())
-	err := pipe.ZAdd(
+	pipe.ZAdd(
 		ctx,
 		"notifications.set",
 		redis.Z{
 			Score:  score,
-			Member: mapper.ConvertPostToNotification(post)}).Err()
-	if err != nil {
-		return err
-	}
-	err = pipe.ZRemRangeByRank(ctx, "notifications.set", 0, -101).Err()
-	if err != nil {
-		return err
-	}
-	_, err = pipe.Exec(ctx)
+			Member: mapper.ConvertPostToNotification(post)})
+	pipe.ZRemRangeByRank(ctx, "notifications.set", 0, -101)
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return err
 	}

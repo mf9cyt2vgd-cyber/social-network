@@ -1,36 +1,27 @@
-# Этап сборки
-FROM golang:latest AS builder
+FROM golang:1.26-alpine AS builder
+
+
+RUN apk add --no-cache git build-base
 
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    librdkafka-dev \
-    pkg-config \
-    git \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=1 go build -o notification-service ./cmd/app
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o notification-service ./cmd/app
 
-FROM debian:bookworm-slim
+FROM gcr.io/distroless/base-debian11
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    tzdata \
-    librdkafka1 \
-    && rm -rf /var/lib/apt/lists/*
-
+# Копируем только бинарник и конфиг
 COPY --from=builder /app/notification-service .
 COPY --from=builder /app/config ./config
 
+# Указываем порт
 EXPOSE 8001
 
+# Запуск приложения
 CMD ["./notification-service"]

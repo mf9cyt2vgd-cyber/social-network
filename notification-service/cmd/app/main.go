@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"notification-service/internal/config"
-	"notification-service/internal/logger"
+	"notification-service/internal/lib/gotel"
+	"notification-service/internal/lib/logger"
 	"notification-service/internal/repository/redis"
 	"notification-service/internal/transport/kafka"
 	"notification-service/internal/usecase"
@@ -17,8 +19,11 @@ func main() {
 	log := logger.SetupLogger(cfg.Env)
 	ctxC, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	shutdown := gotel.InitTracer()
+	defer shutdown(ctxC)
 
 	consumer, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
+	fmt.Println(cfg.GroupID)
 	if err != nil {
 		log.Error("failed to create Kafka consumer")
 		os.Exit(1)
