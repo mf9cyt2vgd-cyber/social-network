@@ -1,9 +1,8 @@
 package domain
 
 import (
+	"context"
 	"time"
-
-	"github.com/ThreeDotsLabs/watermill/message"
 )
 
 type Post struct {
@@ -15,6 +14,6 @@ type Post struct {
 	CreatedAt time.Time `json:"created_at" redis:"created_at"`
 }
 type PostEvent struct {
-	Post   *Post
-	RawMsg *message.Message
+	Post     *Post
+	TraceCtx context.Context
 }

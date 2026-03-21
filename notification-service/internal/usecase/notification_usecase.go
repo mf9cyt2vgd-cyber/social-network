@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"notification-service/internal/domain"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type NotificationUsecase struct {
@@ -13,15 +15,26 @@ type NotificationUsecase struct {
 
 func (n *NotificationUsecase) StartSendingNotifications(ctx context.Context, log *slog.Logger) {
 	posts := n.EventConsumer.Consume(ctx)
-
 	for postEvent := range posts {
-
-		log.Info("received post from Kafka", "post_id", postEvent.Post.ID)
-		err := n.Cache.SaveNotificationWithLimit(ctx, postEvent.Post)
-
-		if err != nil {
-			log.Error("failed to save notification in cache", "error", err)
-			continue
-		}
+		n.handleSinglePost(postEvent, log)
 	}
+}
+func (n *NotificationUsecase) handleSinglePost(event *domain.PostEvent, log *slog.Logger) {
+	incomingCtx := event.TraceCtx
+	span := trace.SpanFromContext(incomingCtx)
+	defer span.End()
+
+	safeCtx := context.WithoutCancel(incomingCtx)
+
+	log.Info("received post from Kafka", "post_id", event.Post.ID)
+
+	err := n.Cache.SaveNotificationWithLimit(safeCtx, event.Post)
+
+	if err != nil {
+		span.RecordError(err)
+
+		log.Error("failed to save notification in cache", "error", err)
+		return
+	}
+
 }

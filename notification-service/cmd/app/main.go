@@ -12,8 +12,17 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
+func init() {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, // Важно для парсинга traceparent
+		propagation.Baggage{},
+	))
+}
 func main() {
 	cfg := config.MustLoad()
 	log := logger.SetupLogger(cfg.Env)

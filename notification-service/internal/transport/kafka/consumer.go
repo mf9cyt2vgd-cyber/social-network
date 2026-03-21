@@ -12,6 +12,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type KafkaConsumer struct {
@@ -69,6 +71,12 @@ func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.PostEvent {
 		}
 		for msg := range messages {
 			func(m *message.Message) {
+				propagator := otel.GetTextMapPropagator()
+				parentCtx := propagator.Extract(m.Context(), propagation.MapCarrier(m.Metadata))
+
+				tr := otel.Tracer("notification-service")
+				childCtx, span := tr.Start(parentCtx, "notification-process")
+				defer span.End()
 				post, err := mapper.ConvertKafkaMessageIntoPost(m.Payload)
 				if err != nil {
 					k.log.Error("failed to convert Kafka message", err)
@@ -76,11 +84,13 @@ func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.PostEvent {
 				}
 				select {
 				case out <- &domain.PostEvent{
-					Post:   &post,
-					RawMsg: msg,
+					Post:     &post,
+					TraceCtx: childCtx,
 				}:
 					msg.Ack()
 				case <-consumeCtx.Done():
+					span.RecordError(consumeCtx.Err())
+					span.End()
 					msg.Nack()
 					return
 				}
