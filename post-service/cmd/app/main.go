@@ -20,8 +20,10 @@ import (
 	"post-service/internal/lib/logger"
 	"post-service/internal/usecase"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 func main() {
@@ -34,13 +36,18 @@ func main() {
 	log := logger.SetupLogger(cfg.Env)
 	log.Info("starting the project...", slog.String("env", cfg.Env))
 
-	// Подключаемся к БД
-	pool, err := pgxpool.New(poolCtx, cfg.DatabaseURL)
+	dbCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		log.Error("failed to parse db config:", slog.Any("err", err))
+	}
+
+	dbCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	pool, err := pgxpool.NewWithConfig(poolCtx, dbCfg)
 	if err != nil {
 		log.Error("failed to connect to db:", slog.Any("err", err))
 	}
 	defer pool.Close()
-
 	postRepo, err := postgres.NewPostgresPostRepository(pool, log)
 	if err != nil {
 		log.Error("failed to create post repository", "error", err)
@@ -53,24 +60,28 @@ func main() {
 
 	postUC := usecase.NewPostUsecase(postRepo, cache) // Бизнес-логика для posts
 
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 	fwd, err := forwarder.StartForwarder(ctx, pool, forwarder.Config{KafkaBrokers: cfg.Brokers, Logger: log})
 	if err != nil {
 		log.Error("failed to start outbox forwarder", "error", err)
 		return
 	}
+
 	// Передаем ctx в обработчики
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
 
 	shutdown := gotel.InitTracer()
 	defer shutdown(ctx)
-	wrappedHandler := otelhttp.NewHandler(router, "Post-Service-handler")
 	// Settings and started server + Graceful shutdown
 	srv := &http.Server{
 		Addr:         cfg.Address,
 		ReadTimeout:  cfg.Timeout,
 		WriteTimeout: cfg.Timeout,
 		IdleTimeout:  cfg.IdleTimeout,
-		Handler:      wrappedHandler,
+		Handler:      router,
 	}
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

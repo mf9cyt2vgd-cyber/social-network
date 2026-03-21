@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type PostUsecase struct {
@@ -48,14 +47,12 @@ func (u *PostUsecase) GetByID(ctx context.Context, id string) (*domain.Post, err
 		return nil, fmt.Errorf("failed to get post by id %s: %w", id, err)
 	}
 
-	sc := trace.SpanFromContext(ctx).SpanContext()
-
+	ctxWithoutCancel := context.WithoutCancel(ctx)
 	go func() {
 		tracer := otel.Tracer("post-service")
 		ctxCache, span := tracer.Start(
-			context.Background(),
+			ctxWithoutCancel,
 			"CacheSavePost",
-			trace.WithLinks(trace.Link{SpanContext: sc}),
 		)
 		defer span.End()
 		if err := u.cache.SavePost(ctxCache, post, 5*time.Minute); err != nil {
@@ -80,14 +77,12 @@ func (u *PostUsecase) CreatePost(ctx context.Context, title, author, content str
 		return nil, fmt.Errorf("failed to save post to database: %w", err)
 	}
 
-	sc := trace.SpanFromContext(ctx).SpanContext()
-
+	ctxWithoutCancel := context.WithoutCancel(ctx)
 	go func() {
 		tracer := otel.Tracer("post-service")
 		ctxCache, span := tracer.Start(
-			context.Background(),
+			ctxWithoutCancel,
 			"CacheSavePost",
-			trace.WithLinks(trace.Link{SpanContext: sc}),
 		)
 		defer span.End()
 		if err := u.cache.SavePost(ctxCache, post, 5*time.Minute); err != nil {

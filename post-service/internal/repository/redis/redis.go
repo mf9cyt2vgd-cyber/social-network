@@ -46,13 +46,16 @@ func (r CacheRepository) GetPost(ctx context.Context, id string) (*domain.Post, 
 	key := fmt.Sprintf("post:%s", id)
 
 	var post domain.Post
-	data, _ := r.Get(ctx, key).Bytes()
-	err := json.Unmarshal(data, &post)
+	data, err := r.Get(ctx, key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get post by id %s: %w", id, err)
+	}
+	err = json.Unmarshal(data, &post)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal post from redis: %w", err)
 	}
 	return &post, err
 }

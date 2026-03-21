@@ -52,8 +52,8 @@ func NewKafkaConsumer(
 	}, nil
 }
 
-func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.Post {
-	out := make(chan *domain.Post)
+func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.PostEvent {
+	out := make(chan *domain.PostEvent)
 	k.done = make(chan struct{})
 	consumeCtx, cancel := context.WithCancel(ctx)
 	k.cancel = cancel
@@ -75,10 +75,13 @@ func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.Post {
 					return
 				}
 				select {
-				case out <- &post:
-					m.Ack()
+				case out <- &domain.PostEvent{
+					Post:   &post,
+					RawMsg: msg,
+				}:
+					msg.Ack()
 				case <-consumeCtx.Done():
-					m.Nack()
+					msg.Nack()
 					return
 				}
 			}(msg)

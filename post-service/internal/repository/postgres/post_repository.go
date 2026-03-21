@@ -12,6 +12,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type PostgresPostRepository struct {
@@ -42,9 +43,6 @@ func NewPostgresPostRepository(pool *pgxpool.Pool, log *slog.Logger) (*PostgresP
 }
 
 func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) error {
-	tracer := otel.Tracer("post-service/db")
-	ctx, span := tracer.Start(ctx, "SQL SavePost")
-	defer span.End()
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -68,14 +66,10 @@ func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) er
 		return err
 	}
 
-	var txContextKey txKey
-	txCtx := context.WithValue(ctx, txContextKey, tx)
-
-	msg := message.NewMessageWithContext(txCtx,
+	msg := message.NewMessageWithContext(ctx,
 		watermill.NewUUID(),
 		payload)
-
-	msg.SetContext(txCtx)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Metadata))
 	err = r.publisher.Publish("posts.created", msg)
 	if err != nil {
 		return err
@@ -84,9 +78,6 @@ func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) er
 }
 
 func (r *PostgresPostRepository) GetByID(ctx context.Context, id string) (*domain.Post, error) {
-	tracer := otel.Tracer("post-service/db")
-	ctx, span := tracer.Start(ctx, "SQL GetById")
-	defer span.End()
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, title, author, content, tags, created_at FROM posts WHERE id=$1`, id)
 
@@ -99,9 +90,6 @@ func (r *PostgresPostRepository) GetByID(ctx context.Context, id string) (*domai
 }
 
 func (r *PostgresPostRepository) List(ctx context.Context) ([]*domain.Post, error) {
-	tracer := otel.Tracer("post-service/db")
-	ctx, span := tracer.Start(ctx, "SQL List")
-	defer span.End()
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, title, author, content, tags, created_at FROM posts`)
 	if err != nil {

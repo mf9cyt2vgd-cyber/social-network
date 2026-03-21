@@ -13,9 +13,12 @@ type NotificationUsecase struct {
 
 func (n *NotificationUsecase) StartSendingNotifications(ctx context.Context, log *slog.Logger) {
 	posts := n.EventConsumer.Consume(ctx)
-	for post := range posts {
-		log.Info("received post from Kafka", "post_id", post.ID)
-		err := n.Cache.SaveNotificationWithLimit(ctx, post)
+
+	for postEvent := range posts {
+
+		log.Info("received post from Kafka", "post_id", postEvent.Post.ID)
+		err := n.Cache.SaveNotificationWithLimit(ctx, postEvent.Post)
+
 		if err != nil {
 			log.Error("failed to save notification in cache", "error", err)
 			continue

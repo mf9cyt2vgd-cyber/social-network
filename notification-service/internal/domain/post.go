@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/ThreeDotsLabs/watermill/message"
+)
 
 type Post struct {
 	ID        string    `json:"id" redis:"id"`
@@ -9,4 +13,8 @@ type Post struct {
 	Content   string    `json:"content" redis:"content"`
 	Tags      []string  `json:"tags" redis:"tags"`
 	CreatedAt time.Time `json:"created_at" redis:"created_at"`
+}
+type PostEvent struct {
+	Post   *Post
+	RawMsg *message.Message
 }

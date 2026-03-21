@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/riandyrn/otelchi"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -21,6 +22,8 @@ func New(
 	// commentUC *usecase.CommentUsecase,
 ) *chi.Mux {
 	r := chi.NewRouter()
+
+	r.Use(otelchi.Middleware("post-service", otelchi.WithChiRoutes(r)))
 
 	// Middlewares
 	r.Use(middleware.RequestID)
