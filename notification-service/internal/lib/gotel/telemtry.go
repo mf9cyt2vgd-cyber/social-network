@@ -25,7 +25,7 @@ func InitTracer(ctx context.Context) func(context.Context) error {
 		trace.WithSampler(trace.AlwaysSample()),
 		trace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("post-service"),
+			semconv.ServiceNameKey.String("notification-service"),
 		)),
 	)
 

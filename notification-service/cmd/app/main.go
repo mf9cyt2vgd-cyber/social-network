@@ -26,15 +26,16 @@ func init() {
 func main() {
 	cfg := config.MustLoad()
 	log := logger.SetupLogger(cfg.Env)
-	ctxC, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
+	ctxC, cancel := context.WithCancel(ctx)
 	defer cancel()
-	shutdown := gotel.InitTracer(ctxC)
+	shutdown := gotel.InitTracer(ctx)
 	defer func(ctx context.Context) {
-		err := shutdown(ctxC)
+		err := shutdown(ctx)
 		if err != nil {
 			log.Error("failed to stop tracer", "error", err)
 		}
-	}(ctxC)
+	}(ctx)
 	consumer, err := kafka.NewKafkaConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupID, cfg.Kafka.Topic, log)
 	fmt.Println(cfg.Kafka.GroupID)
 	if err != nil {
