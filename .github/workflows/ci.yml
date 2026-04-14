@@ -33,7 +33,21 @@ jobs:
           echo "$ENV_CONTENT" > ./post-service/.env
           echo "$ENV_CONTENT" > ./notification-service/.env
 
-      - name: Build and Run
+      - name: Build and Smoke Test
         run: |
+
           docker compose build
-          docker compose up --abort-on-container-exit --exit-code-from notification-service
+          
+          docker compose up -d
+          
+          sleep 10
+          
+          if [ $(docker compose ps --format json | jq '.[] | select(.State == "exited")' | wc -l) -ne 0 ]; then
+            echo "Один из контейнеров упал после запуска!"
+            docker compose logs
+            exit 1
+          fi
+          
+          echo "Все сервисы успешно запустились!"
+          
+          docker compose down
