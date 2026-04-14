@@ -24,4 +24,4 @@ jobs:
 
       - name: Run Tests in Docker Compose
       
-        run: docker-compose up --abort-on-container-exit --exit-code-from notification-service
+        run: docker compose up --abort-on-container-exit --exit-code-from notification-service
