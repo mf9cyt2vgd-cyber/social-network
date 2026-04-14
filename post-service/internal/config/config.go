@@ -14,14 +14,14 @@ import (
 
 // Config is a structure with all needed resources
 type Config struct {
-	Env              string `yaml:"env" env-default:"local"`
-	ServiceName      string `yaml:"serviceName" env-default:"post-service"`
-	ServiceVersion   string `yaml:"service_version" env-default:"0.0.1"`
-	TelemetryEnabled string `yaml:"telemetry_enabled" env-default:"true"`
-	DatabaseURL      string `env:"DATABASE_URL,required"`
-	HTTPServer HTTPServer       `yaml:"http_server"`
-	Kafka Kafka            `yaml:"kafka"`
-	Redis Redis            `yaml:"redis"`
+	Env              string     `yaml:"env" env-default:"local"` //nolint:goimports
+	ServiceName      string     `yaml:"serviceName" env-default:"post-service"`
+	ServiceVersion   string     `yaml:"service_version" env-default:"0.0.1"`
+	TelemetryEnabled string     `yaml:"telemetry_enabled" env-default:"true"`
+	DatabaseURL      string     `env:"DATABASE_URL,required"`
+	HTTPServer       HTTPServer `yaml:"http_server"`
+	Kafka            Kafka      `yaml:"kafka"`
+	Redis            Redis      `yaml:"redis"`
 }
 
 // HTTPServer includes basic variables to configure server

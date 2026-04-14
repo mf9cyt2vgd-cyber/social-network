@@ -5,21 +5,19 @@ import (
 	"log"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp" // Новый импорт
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
-func InitTracer() func(context.Context) error {
-
-	exp, err := jaeger.New(
-		jaeger.WithCollectorEndpoint(
-			jaeger.WithEndpoint("http://jaeger:14268/api/traces"),
-		),
+func InitTracer(ctx context.Context) func(context.Context) error {
+	exp, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint("jaeger:4318"),
+		otlptracehttp.WithInsecure(), // Отключаем TLS для локальной разработки
 	)
 	if err != nil {
-		log.Fatal("Failed to create Jaeger exporter:", err)
+		log.Fatal("Failed to create OTLP exporter:", err)
 	}
 
 	tp := trace.NewTracerProvider(

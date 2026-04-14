@@ -21,6 +21,7 @@ type PostgresPostRepository struct {
 	publisher message.Publisher
 	logger    *slog.Logger
 }
+
 func NewPostgresPostRepository(pool *pgxpool.Pool, log *slog.Logger) (*PostgresPostRepository, error) {
 	db := wmsql.BeginnerFromPgx(pool)
 	outboxPublisher, err := wmsql.NewPublisher(
