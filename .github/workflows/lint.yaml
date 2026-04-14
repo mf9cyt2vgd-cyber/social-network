@@ -18,7 +18,14 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-      - name: golangci-lint
+          cache: false
+      - name: lint post-service
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11
+          working-directory: post-service
+      - name: lint notification-service
+        uses: golangci/golangci-lint-action@v9
+        with:
+            version: v2.11
+            working-directory: notification-service
