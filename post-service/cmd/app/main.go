@@ -84,7 +84,7 @@ func main() {
 	// Передаем ctx в обработчики
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
 
-	shutdown := gotel.InitTracer()
+	shutdown := gotel.InitTracer(ctx)
 	defer func(ctx context.Context) {
 		err = shutdown(ctx)
 		if err != nil {
