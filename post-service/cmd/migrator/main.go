@@ -1,5 +1,7 @@
 package main
 
+// package for migrations
+
 import (
 	"errors"
 	"flag"

@@ -1,5 +1,6 @@
-// cmd/main.go
 package main
+
+// main package
 
 import (
 	"context"
@@ -53,10 +54,20 @@ func main() {
 		log.Error("failed to create post repository", "error", err)
 		os.Exit(1)
 	}
-	defer postRepo.Close()
+	defer func(postRepo *postgres.PostgresPostRepository) {
+		err = postRepo.Close()
+		if err != nil {
+			log.Error("failed to close repository", "error", err)
+		}
+	}(postRepo)
 
 	cache, err := redis.NewRedisClient(cfg.Redis.Addr, cfg.Redis.DB, log.With(slog.String("component", "redis")))
-	defer cache.Close()
+	defer func(cache *redis.CacheRepository) {
+		err = cache.Close()
+		if err != nil {
+			log.Error("failed to close cache", "error", err)
+		}
+	}(cache)
 
 	postUC := usecase.NewPostUsecase(postRepo, cache) // Бизнес-логика для posts
 
@@ -74,7 +85,12 @@ func main() {
 	router := route.New(ctx, log.With(slog.String("component", "http")), postUC)
 
 	shutdown := gotel.InitTracer()
-	defer shutdown(ctx)
+	defer func(ctx context.Context) {
+		err = shutdown(ctx)
+		if err != nil {
+			log.Error("failed to stop tracer", "error", err)
+		}
+	}(ctx)
 	// Settings and started server + Graceful shutdown
 	srv := &http.Server{
 		Addr:         cfg.Address,

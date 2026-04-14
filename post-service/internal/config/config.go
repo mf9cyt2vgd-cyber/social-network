@@ -1,5 +1,7 @@
 package config
 
+// package provides configs from post-service/config
+
 import (
 	"fmt"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config is a structure with all needed resources
 type Config struct {
 	Env              string `yaml:"env" env-default:"local"`
 	ServiceName      string `yaml:"serviceName" env-default:"post-service"`
@@ -21,23 +24,27 @@ type Config struct {
 	Redis            `yaml:"redis"`
 }
 
+// HTTPServer includes basic variables to configure server
 type HTTPServer struct {
 	Address     string        `yaml:"address" env-default:"localhost:8080"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
 }
 
+// Kafka includes basic variables to configure kafka-go worker
 type Kafka struct {
 	Brokers []string `yaml:"brokers" env-default:"localhost:9092"`
 	Topic   string   `yaml:"topic" env-default:"posts"`
 	GroupID string   `yaml:"group_id" env-default:"notification-service"`
 }
 
+// Redis includes basic variables to configure redis-client
 type Redis struct {
 	Addr string `yaml:"address" env-default:"localhost:6379"`
 	DB   int    `yaml:"db" env-default:"0"`
 }
 
+// MustLoad is a critical function that return ready config for app
 func MustLoad() *Config {
 	// Пробуем подгрузить .env, если он есть (в Docker его может не быть)
 	_ = godotenv.Load()

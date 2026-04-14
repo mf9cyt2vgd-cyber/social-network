@@ -10,6 +10,7 @@ import (
 	wmsql "github.com/ThreeDotsLabs/watermill-sql/v4/pkg/sql"
 	"github.com/ThreeDotsLabs/watermill/components/forwarder"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -47,7 +48,12 @@ func (r *PostgresPostRepository) Save(ctx context.Context, post *domain.Post) er
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func(tx pgx.Tx, ctx context.Context) {
+		err = tx.Rollback(ctx)
+		if err != nil {
+			r.logger.Error("failed to rollback transaction", "error", err)
+		}
+	}(tx, ctx)
 	_, err = tx.Exec(ctx, `INSERT INTO posts (id, title, author, content, tags, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		post.ID, post.Title, post.Author, post.Content, post.Tags, post.CreatedAt)

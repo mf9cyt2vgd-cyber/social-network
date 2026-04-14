@@ -1,3 +1,4 @@
+// Package http provides handlers and so on
 package http
 
 import (
@@ -6,18 +7,22 @@ import (
 	"net/http"
 )
 
+// HealthResponse is a struct with minimum info to recognize health of http-connection to app
 type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// HealthHandler
 type HealthHandler struct {
 	log *slog.Logger
 }
 
+// NewHealthHandler
 func NewHealthHandler(log *slog.Logger) *HealthHandler {
 	return &HealthHandler{log: log}
 }
 
+// HealthCheck
 func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	response := HealthResponse{Status: "ok"}
