@@ -7,10 +7,13 @@ run:
 linters:
   enable:
     - errcheck
-    - goimports
     - revive
     - govet
     - staticcheck
+
+formatters:
+  enable:
+    - goimports
 
 issues:
   max-issues-per-linter: 0
