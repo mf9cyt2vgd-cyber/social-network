@@ -75,7 +75,7 @@ func main() {
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	fwd, err := forwarder.StartForwarder(ctx, pool, forwarder.Config{KafkaBrokers: cfg.Brokers, Logger: log})
+	fwd, err := forwarder.StartForwarder(ctx, pool, forwarder.Config{KafkaBrokers: cfg.Kafka.Brokers, Logger: log})
 	if err != nil {
 		log.Error("failed to start outbox forwarder", "error", err)
 		return
@@ -93,16 +93,16 @@ func main() {
 	}(ctx)
 	// Settings and started server + Graceful shutdown
 	srv := &http.Server{
-		Addr:         cfg.Address,
-		ReadTimeout:  cfg.Timeout,
-		WriteTimeout: cfg.Timeout,
-		IdleTimeout:  cfg.IdleTimeout,
+		Addr:         cfg.HTTPServer.Address,
+		ReadTimeout:  cfg.HTTPServer.Timeout,
+		WriteTimeout: cfg.HTTPServer.Timeout,
+		IdleTimeout:  cfg.HTTPServer.IdleTimeout,
 		Handler:      router,
 	}
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Info("server starting", slog.String("address", cfg.Address))
+	log.Info("server starting", slog.String("address", cfg.HTTPServer.Address))
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
