@@ -19,9 +19,9 @@ type Config struct {
 	ServiceVersion   string `yaml:"service_version" env-default:"0.0.1"`
 	TelemetryEnabled string `yaml:"telemetry_enabled" env-default:"true"`
 	DatabaseURL      string `env:"DATABASE_URL,required"`
-	HTTPServer       `yaml:"http_server"`
-	Kafka            `yaml:"kafka"`
-	Redis            `yaml:"redis"`
+	HTTPServer HTTPServer       `yaml:"http_server"`
+	Kafka Kafka            `yaml:"kafka"`
+	Redis Redis            `yaml:"redis"`
 }
 
 // HTTPServer includes basic variables to configure server
