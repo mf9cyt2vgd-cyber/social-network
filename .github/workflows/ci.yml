@@ -19,9 +19,21 @@ jobs:
         with:
           go-version: '1.25' 
 
-      - name: Build Docker Compose
-        run: docker compose build
+      - name: Create .env files
+        run: |
+          # Создаем контент файла (используем одинаковые данные для всех сервисов)
+          ENV_CONTENT="POSTGRES_USER=ivan
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=postgres
+          DB_HOST=postgres
+          DB_PORT=5432
+          DATABASE_URL=postgres://ivan:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/postgres?sslmode=disable"
+          
+          # Записываем контент в файлы каждого сервиса
+          echo "$ENV_CONTENT" > ./post-service/.env
+          echo "$ENV_CONTENT" > ./notification-service/.env
 
-      - name: Run Tests in Docker Compose
-      
-        run: docker compose up --abort-on-container-exit --exit-code-from notification-service
+      - name: Build and Run
+        run: |
+          docker compose build
+          docker compose up --abort-on-container-exit --exit-code-from notification-service
