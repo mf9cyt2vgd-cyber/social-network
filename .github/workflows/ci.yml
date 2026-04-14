@@ -1,0 +1,54 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true    
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Create .env files
+        run: |
+          ENV_CONTENT="POSTGRES_USER=ivan
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=postgres
+          DB_HOST=postgres
+          DB_PORT=5432
+          DATABASE_URL=postgres://ivan:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/postgres?sslmode=disable"
+          
+          echo "$ENV_CONTENT" > ./post-service/.env
+          echo "$ENV_CONTENT" > ./notification-service/.env
+
+      - name: Build and Smoke Test
+        run: |
+          docker compose build
+          docker compose up -d
+          
+          sleep 10
+          
+          FAILED_SERVICES=$(docker compose ps --format "{{.Service}}: {{.State}}" | grep -v "running" || true)
+          
+          if [ ! -z "$FAILED_SERVICES" ]; then
+            echo "Failed services found:"
+            echo "$FAILED_SERVICES"
+            docker compose logs
+            exit 1
+          fi
+          
+          docker compose down
