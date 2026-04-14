@@ -11,8 +11,8 @@ import (
 
 type Config struct {
 	Env   string `yaml:"env" env-default:"local"`
-	Kafka `yaml:"kafka"`
-	Redis `yaml:"redis"`
+	Kafka Kafka  `yaml:"kafka"`
+	Redis Redis  `yaml:"redis"`
 }
 type Kafka struct {
 	Brokers []string `yaml:"brokers" env-default:"localhost:9092"`

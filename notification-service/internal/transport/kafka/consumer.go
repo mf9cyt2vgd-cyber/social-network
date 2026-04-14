@@ -66,7 +66,7 @@ func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.PostEvent {
 
 		messages, err := k.subscriber.Subscribe(ctx, k.topic)
 		if err != nil {
-			k.log.Error("failed to subscribe to topic", err)
+			k.log.Error("failed to subscribe to topic", "error", err)
 			return
 		}
 		for msg := range messages {

@@ -40,6 +40,10 @@ func (r *RedisCache) SaveNotificationWithLimit(ctx context.Context, post *domain
 	}
 	return nil
 }
-func (r *RedisCache) Close() {
-	r.client.Close()
+func (r *RedisCache) Close() error {
+	err := r.client.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }

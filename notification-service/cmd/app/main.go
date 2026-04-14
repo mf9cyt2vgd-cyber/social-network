@@ -28,11 +28,15 @@ func main() {
 	log := logger.SetupLogger(cfg.Env)
 	ctxC, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	shutdown := gotel.InitTracer()
-	defer shutdown(ctxC)
-
-	consumer, err := kafka.NewKafkaConsumer(cfg.Brokers, cfg.GroupID, cfg.Topic, log)
-	fmt.Println(cfg.GroupID)
+	shutdown := gotel.InitTracer(ctxC)
+	defer func(ctx context.Context) {
+		err := shutdown(ctxC)
+		if err != nil {
+			log.Error("failed to stop tracer", "error", err)
+		}
+	}(ctxC)
+	consumer, err := kafka.NewKafkaConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupID, cfg.Kafka.Topic, log)
+	fmt.Println(cfg.Kafka.GroupID)
 	if err != nil {
 		log.Error("failed to create Kafka consumer")
 		os.Exit(1)
@@ -45,7 +49,12 @@ func main() {
 	}(consumer)
 
 	cache := redis.New(cfg.Redis.Addr, cfg.Redis.DB, log)
-	defer cache.Close()
+	defer func(cache *redis.RedisCache) {
+		err = cache.Close()
+		if err != nil {
+			log.Error("failed to close cache", "error", err)
+		}
+	}(cache)
 
 	notificationsUC := usecase.NotificationUsecase{
 		Cache:         cache,
