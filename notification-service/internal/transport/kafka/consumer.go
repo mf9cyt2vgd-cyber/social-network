@@ -79,7 +79,7 @@ func (k *KafkaConsumer) Consume(ctx context.Context) chan *domain.PostEvent {
 				defer span.End()
 				post, err := mapper.ConvertKafkaMessageIntoPost(m.Payload)
 				if err != nil {
-					k.log.Error("failed to convert Kafka message", err)
+					k.log.Error("failed to convert Kafka message", "error", err)
 					return
 				}
 				select {
