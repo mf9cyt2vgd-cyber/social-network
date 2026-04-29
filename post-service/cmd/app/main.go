@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Error("failed to parse db config:", slog.Any("err", err))
 	}
-
+	dbCfg.MaxConns = 100
 	dbCfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(poolCtx, dbCfg)
