@@ -30,7 +30,7 @@ import (
 func main() {
 	ctx := context.Background()
 	poolCtx := context.Background()
-	// Configurate system
+	// Configure system
 	cfg := config.MustLoad()
 
 	// Settings logger

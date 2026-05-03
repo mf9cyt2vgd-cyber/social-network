@@ -25,6 +25,7 @@ services:
       - APP_ENV=dev
     ports:
       - "8000:8000"
+      - '2112:2112'
     networks:
       - monitoring
     command: ["sh", "-c", "./migrator --migrations-path ./migrations && ./post-service"]
@@ -103,6 +104,8 @@ services:
     user: "root"
     command: -config.file=/etc/loki/local-config.yaml
     volumes: [ ./data/loki:/loki ]
+    networks:
+      - monitoring
 
   promtail:
     image: grafana/promtail:3.3.2
@@ -112,12 +115,26 @@ services:
         - /var/lib/docker/containers:/var/lib/docker/containers:ro
         - /var/run/docker.sock:/var/run/docker.sock
     depends_on: [ loki ]
+    networks:
+      - monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.4.0
     ports: [ "3000:3000" ]
     volumes:
       - ./configs/grafana.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    networks:
+      - monitoring
 
 # Лучше убрать из билда и запускать в ручную, так как после запуска у нас остаються тестовые данные
 #  bombardier:
